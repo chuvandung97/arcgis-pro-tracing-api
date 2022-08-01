@@ -1,0 +1,65 @@
+﻿<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Tiled map service</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/3.21/esri/css/esri.css">
+    <style>
+      html, body, #map {
+        height: 100%; width: 100%; margin: 0; padding: 0;
+      }
+    </style>
+
+    <script src="https://js.arcgis.com/3.21/"></script>
+    <script>
+      var map;
+
+      require(["esri/map", 
+        "esri/layers/ArcGISTiledMapServiceLayer", 
+        "esri/geometry/Point",
+        "esri/SpatialReference",
+        "esri/request",
+        "esri/config",
+        "esri/layers/ArcGISDynamicMapServiceLayer",
+        "dojo/domReady!"],
+        function(Map, ArcGISTiledMapServiceLayer, Point, SpatialReference,esriRequest,esriConfig,ArcGISDynamicMapServiceLayer) {
+          esriConfig.defaults.io.proxyUrl = "/api/arcgis/proxy";
+          esriConfig.defaults.io.alwaysUseProxy = true;
+          esriConfig.defaults.io.corsEnabledServers.push("192.168.8.11");
+          // esriRequest.setRequestPreCallback(function (ioArgs) {
+          //   //ioArgs.url = "http://192.168.8.11/schema2/api/arcgis/proxy?" + ioArgs.url;
+          //   ioArgs.headers.Authorization = "bearer 0VQbhqu57oihkv352TXh2nedN2KC1EWKUfhe5J9XnNSmGABhWUDRoG2WuyeDXQHjaiiPMBo92IaHvBeM0LpkEYWpdr48cIQlwu3ADBZbpxO29i-u3UomW1PEKOO2wPPOscUXCynT9hp-Z-lEQDSXHleJp0hAdoCDBFlOGGGElFdK-3dDzFDCHa6nxDxrJS1moCpg42gB12nLRQtR9takb2pSvOuuS3tGmfyiUOFWnrMM63Gbk3uBx2hmfyhq_qMLeuSscVFFcYDWfA7I1K2m2kEXn1C-WUJSP76uVavgDgOPnK1gLLEbHvrsdQ8Cf_F349zRyKHswN2Kmwsm8vE7hRD7R7vR3YGHkdBxW0L9RzgoOqcGlIa_sNd0E-Wf4af7KUJqpoQ_EOOzjbDcko0T1PZ2vMXVK-0TP2B1H_w_nDKUR_RYi4_WUVKlPFA2XCC2tfNUS0hDefx92EtWonpNT58OtIVW7jG5W4FkLE16MyzfK4fHcmRCdBUmbdY2gEJTQaBkvqLfrtHjXGUwynnir7qxuc-jRcWInZFGtQ9lKTo";
+          //   return ioArgs;
+          // });
+          
+
+
+          extent = new esri.geometry.Extent(-1039.0463037029804, 13665.142902791289, 59183.325128882076, 52612.51320063512, new esri.SpatialReference({ "wkid": 3414 }));
+          map = new Map("map",{extent: extent});
+          var tiled = new ArcGISTiledMapServiceLayer("http://192.168.8.11/arcgis/rest/services/SCHEMA/BASEMAP/MapServer");
+          var dynamicMapServiceLayer = new ArcGISDynamicMapServiceLayer("http://192.168.8.11/arcgis/rest/services/SCHEMA/OP_VTG_22kV/MapServer");
+          
+          const xhr = new XMLHttpRequest();
+          xhr.open('post', '/token', true);
+          xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+          // set the authorization HTTP header
+          //xhr.setRequestHeader('Authorization', `bearer ${Auth.getToken()}`);
+          var params = "grant_type=password&username=tsrk726w&Password=cyient#3";
+          xhr.responseType = 'json';
+          xhr.addEventListener('load', () => {
+            if (xhr.status === 200) {
+              map.addLayer(dynamicMapServiceLayer);
+            }
+          });
+          xhr.send(params);
+          //map.addLayer(tiled);
+          
+        }
+      );
+    </script>
+  </head>
+  <body>
+    <div id="map"></div>
+  </body>
+</html>

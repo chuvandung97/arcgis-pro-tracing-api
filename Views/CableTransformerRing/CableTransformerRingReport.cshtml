@@ -1,0 +1,323 @@
+﻿@model Schema.Web.Models.SLDCableTransformerRingModel
+
+@{ ViewBag.Title = "TF/Network Cable Report"; }
+
+<link href="~/Content/custom-style.css" rel="stylesheet" />
+
+@using (Html.BeginForm("CableTransformerRingReport", "CableTransformerRing", FormMethod.Post))
+{
+    //added by Sandip on 25th March 2021 for RFC0018439 -- To put restrictions on exposed report URLs.
+    //added "GEMS_VIEWER_DISTRIBUTION" by Sandip on 18/04/2021 for RFC0032836, Implementation of MHA security clearance
+    if (User.IsInRole("SINGAPOREPOWER\\GIS VIEWER") || User.IsInRole("SINGAPOREPOWER\\GEMS_VIEWER_DISTRIBUTION") || User.IsInRole("SINGAPOREPOWER\\GEMS_Viewer_Distribution"))
+    {
+<div id="divMaxMinTransformer">
+    <fieldset style="padding-bottom: 0px;">
+        <legend style="width: 305px;">Cable Transformer Ring Report:</legend>
+        <div class="row report-title">
+            <div class="col-md-1" style="padding:0px">
+                <label>Substation<label style="color: red; font-size:20px; padding:0px; margin:0px;">*</label></label>
+            </div>
+            <div class="col-md-3">
+                @Html.TextBox("searchTerm", null, new { id = "txtSearch", @class = "form-control" })
+            </div>
+            <div class="col-md-1">
+                <label>Voltage<label style="color: red; font-size:20px; padding:0px; margin:0px;">*</label></label>
+            </div>
+            <div class="col-md-3">
+                @Html.DropDownListFor(m => m.SelectedVoltage, Model.Voltages, new { @class = "form-control" })
+            </div>
+            <div class="col-md-1">
+                <label>Network Types<label style="color: red; font-size:20px; padding:0px; margin:0px;">*</label></label>
+            </div>
+            <div class="col-md-3">
+                @Html.DropDownListFor(m => m.SelectedReportType, Model.ReportTypes, new { @class = "form-control" })
+            </div>
+        </div>
+        <div class="row report-title">
+            <div class="col-md-1">
+                <label>Criteria<label style="color: red; font-size:20px; padding:0px; margin:0px;">*</label></label>
+            </div>
+            <div class="col-md-3">
+                @Html.DropDownListFor(m => m.SelectedSearchCriteria, Model.SearchCriteria, new { @class = "form-control" })
+            </div>
+            <div class="col-md-8">
+                <input id="generateReport" type="submit" name="button" class="btn btn-primary pull-right" value="Generate Report" />
+            </div>
+        </div>
+        <label style="font-size:11px; font-weight:bold"><b>UF</b><label style="color: red; font-size:11px; padding:0px; margin:0px;">*</label> = UF is based on sum of monthly max load of network TF from 66/22kV s/s divided by sum of network TF capacity.</label>
+    </fieldset>
+</div> }
+else
+{<h1 style="font-size:300%;">Authorization has been denied for this request</h1>}
+}
+@section Scripts
+{
+    <script src="~/Scripts/tableToCSV.js"></script>
+    <link href="~/Content/AutoComplete/jquery-ui.css" rel="stylesheet" />
+    <script src="~/Content/AutoComplete/jquery-ui.js"></script>
+    <script src="~/Scripts/jquery-migrate-3.0.0.js"></script>
+    <script src="~/Scripts/jspdf.min.js"></script>
+    <script src="~/Scripts/jspdf.plugin.autotable.js"></script>
+
+    <script type="text/javascript">
+        //substation search
+        $(function () {
+            $("#txtSearch").autocomplete({
+                source: '@Url.Action("GetSubstation")',
+                minLength: 3
+            });
+            $("#SelectedReportType").on("change", function () {
+                if ($("#SelectedReportType").val() == "Cable") {
+                    document.getElementById('SelectedSearchCriteria').value = "Substation";
+                    $("#SelectedSearchCriteria").attr("disabled", "disabled");
+                }
+                else {
+                    $("#SelectedSearchCriteria").removeAttr("disabled");
+                }
+            });
+        });
+
+        $('#generateReport').click(function () {
+            if ($("#SelectedReportType").val() == "Cable") {
+                document.getElementById('SelectedSearchCriteria').value = "Substation";
+                $("#SelectedSearchCriteria").attr("disabled", "disabled");
+            }
+            else {
+                $("#SelectedSearchCriteria").removeAttr("disabled");
+            }
+
+        });
+    </script>
+    <script type="text/javascript">
+
+
+        // adjust table body height based on widow size
+        $(window).resize(function () {
+
+            $("tbody").css({
+                "max-height": $(window).height() - 394
+            });
+        });
+
+        // set default table height based on window height
+        $("tbody").css({
+            "max-height": $(window).height() - 394
+        });
+
+        var reportTitle;
+        var hiddenVal = document.getElementById('hdnReportType');
+        if (hiddenVal.value == 'Cable')
+            reportTitle = "Cable Report (Total Records = " + (document.getElementById('assets-data-table').rows.length - 1) + ")";
+        else
+            reportTitle = "Transformer Report (Total Records = " + (document.getElementById('assets-data-table').rows.length - 1) + ")";
+        //export To CSV
+        $(document).ready(function () {
+            $("#csvExport").click(function () {
+                $("#exportDiv").tableToCSV(reportTitle);
+            });
+        });
+        //export To PDF
+        $(function () {
+            var pdf = new jsPDF();
+            var specialElementHandlers = {
+                '#editor': function (element, renderer) {
+                    return true;
+                }
+            };
+            //export to PDF
+            $('#pdfExport').click(function () {
+                let pdf = new jsPDF('l', 'pt', 'a4');
+                pdf.setFontSize(11.5);
+                pdf.setTextColor(128, 0, 0);
+                pdf.setFontStyle('courier');
+                pdf.text(reportTitle, 40, 35);
+                const header = function (data) {
+                    pdf.setFontSize(10);
+                    pdf.setTextColor(40, 0, 0);
+                    pdf.setFontStyle('normal');
+                    //for Page Count
+                    let str = 'Page ' + data.pageCount;
+                    pdf.text(str, 40, 20);
+                };
+
+                const totalPagesExp = '{total_pages_count_string}';
+
+                const options = {
+                    beforePageContent: header,
+                    //afterPageContent: footer,
+                    startY: 60,
+                    tableWidth: 'auto',
+                    columnWidth: 'auto',
+                    theme: 'grid',
+                    //bodyStyles: {lineColor: [0, 0, 0]},
+                    styles: {
+                        font: 'courier',
+                        lineColor: [44, 62, 80],
+                        lineWidth: 0.75,
+                        overflow: 'linebreak'
+                    },
+                    headerStyles: {
+                        fillColor: [51, 122, 183],
+                        fontSize: 10
+                    },
+                    alternateRowStyles: {
+                        //fillColor: [232, 233, 234]
+                    },
+                    margin: {
+                        top: 30
+                    }
+                };
+
+                var elem = document.getElementById('assets-data-table');
+                var data = pdf.autoTableHtmlToJson(elem);
+
+                pdf.autoTable(data.columns, data.rows, options);
+
+                // Total page number plugin only available in jspdf v1.0+
+                if (typeof pdf.putTotalPages === 'function') {
+                    pdf.putTotalPages(totalPagesExp);
+                }
+                var ts = new Date().getTime();
+                pdf.save(reportTitle + "_" + ts + ".pdf");
+
+            });
+        });
+    </script>
+}
+@if (User.IsInRole("SINGAPOREPOWER\\GIS VIEWER") || User.IsInRole("SINGAPOREPOWER\\GEMS_VIEWER_DISTRIBUTION") || User.IsInRole("SINGAPOREPOWER\\GEMS_Viewer_Distribution"))
+{
+<div class="row" id="exportDiv">
+    <div class="col-md-12">
+        <div class="panel panel-primary list-panel" id="list-panel">
+            <div>
+                @if (Model.Result != null)
+                {
+<input id="hdnReportType" type="hidden" value=@Html.DisplayFor(m => m.SelectedReportType.Text) /> if (Model.SelectedReportType.Text == "Cable")
+                    {
+<div class="resultsheading">
+    <h1 class="panel-title list-panel-title">@Html.DisplayFor(m => m.SelectedReportType.Text) Report</h1>
+</div>
+                        <button id="pdfExport" data - export="export" class="pdfstyle"></button>
+                                                <button id="csvExport" data-export="export" class="csvstyle"></button>
+
+                                                                        <table id="assets-data-table"
+                                                                               class="table table-striped table-bordered"
+                                                                               style="width:100%;">
+
+                                                                            <thead style="width:100%; background-color:lightgray; word-break: break-word;">
+                                                                                <tr>
+                                                                                    <th>SNO.</th>
+                                                                                    <th>Source Zone</th>
+                                                                                    <th>Source Stn</th>
+                                                                                    <th>Source Stn Volt Level</th>
+                                                                                    <th>1st Leg Stn</th>
+                                                                                    <th>Target Zone</th>
+                                                                                    <th>Last Leg Stn</th>
+                                                                                    <th>Dist TF Cap</th>
+                                                                                    <th>Dist TF Mth Max Load</th>
+                                                                                    <th>UF<label style="color: red; font-size:20px; padding:0px; margin:0px;">*</label></th>
+                                                                                    <th>Sum Max Load (Mth)</th>
+                                                                                    <th>Sum Min Load (Mth)</th>
+                                                                                    <th>Sum Max Load (Day)</th>
+                                                                                    <th>Sum Max Load (Night)</th>
+                                                                                    <th>Sum of All Time High</th>
+                                                                                    <th>All Time High Load Reading Date</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody style="width:100.2%; overflow-y:scroll; overflow-x:hidden">
+                                                                                @foreach (var asset in Model.Result)
+                                                                                {
+                                                        <tr>
+                                                            <td>@asset["rn"]</td>
+                                                            <td>@asset["source_zone"]</td>
+                                                            <td>@asset["source_substation"]</td>
+                                                            <td>@asset["source_voltageclass"]</td>
+                                                            <td>@asset["first_leg_substation"]</td>
+                                                            <td>@asset["target_zone"]</td>
+                                                            <td>@asset["last_leg_substation"]</td>
+                                                            <td>@asset["sum_trf_mvarating"]</td>
+                                                            <td>@asset["sum_trf_prevmth_maxloadreading"]</td>
+                                                            <td>@asset["ufactor"]</td>
+                                                            <td>@asset["sum_prevmth_maxloadreading"]</td>
+                                                            <td>@asset["sum_prevmth_minloadreading"]</td>
+                                                            <td>@asset["sum_dayloadreading"]</td>
+                                                            <td>@asset["sum_nightloadreading"]</td>
+                                                            <td>@asset["sum_alltime_maxloadreading"]</td>
+                                                            <td>@asset["alltime_maxloadreading_date"]</td>
+                                                        </tr>}
+                                                                            </tbody>
+                                                                        </table> }
+                    else if ((Model.SelectedReportType.Text == "Transformer")) //|| (Model.SelectedReportType.Text == "Third Injection Results")
+                    {
+                                                <div class="resultsheading">
+                                                    <h1 class="panel-title list-panel-title">@Html.DisplayFor(m => m.SelectedReportType.Text) Report</h1>
+                                                </div>
+                                                                        <button id="pdfExport" data - export="export" class="pdfstyle"></button>
+                                                                                                <button id="csvExport" data-export="export" class="csvstyle"></button>
+                                                                                                                        <table id="assets-data-table"
+                                                                                                                               class="table table-striped table-bordered"
+                                                                                                                               style="width:100%;">
+                                                                                                                            <thead style="width:100%; background-color:lightgray">
+                                                                                                                                <tr>
+                                                                                                                                    <th>SNO.</th>
+                                                                                                                                    <th>Source Stn</th>
+                                                                                                                                    <th>Source Stn Volt Level</th>
+                                                                                                                                    <th>Stn Name</th>
+                                                                                                                                    <th>TF No</th>
+                                                                                                                                    <th>Volt Level</th>
+                                                                                                                                    <th>TF Capacity</th>
+                                                                                                                                    <th>UF<label style="color: red; font-size:20px; padding:0px; margin:0px;">*</label></th>
+                                                                                                                                    <th>Zone</th>
+                                                                                                                                    <th>Max Load (Mth)</th>
+                                                                                                                                    <th>Min Load (Mth)</th>
+                                                                                                                                    <th>Max Load (Day)</th>
+                                                                                                                                    <th>Max Load (Night)</th>
+                                                                                                                                    <th>All Time High Load</th>
+                                                                                                                                    <th>All Time Max Load Reading Date</th>
+                                                                                                                                </tr>
+                                                                                                                            </thead>
+                                                                                                                            <tbody style="width:100.2%; overflow-y:scroll; overflow-x:hidden">
+                                                                                                                                @foreach (var asset in Model.Result)
+                                                                                                                                {
+                                                                                                        <tr>
+                                                                                                            <td>@asset["rn"]</td>
+                                                                                                            <td>@asset["source_substation"]</td>
+                                                                                                            <td>@asset["source_voltageclass"]</td>
+                                                                                                            <td>@asset["target_substation"]</td>
+                                                                                                            <td>@asset["trf_no"]</td>
+                                                                                                            <td>@asset["target_voltageclass"]</td>
+                                                                                                            <td>@asset["trf_mvarating"]</td>
+                                                                                                            <td>@asset["ufactor"]</td>
+                                                                                                            <td>@asset["target_zone"]</td>
+                                                                                                            <td>@asset["prevmth_maxloadreading"]</td>
+                                                                                                            <td>@asset["prevmth_minloadreading"]</td>
+                                                                                                            <td>@asset["dayloadreading"]</td>
+                                                                                                            <td>@asset["nightloadreading"]</td>
+                                                                                                            <td>@asset["alltime_maxloadreading"]</td>
+                                                                                                            <td>@asset["alltime_maxloadreading_date"]</td>
+                                                                                                        </tr>}
+                                                                                                                            </tbody>
+                                                                                                                        </table> }
+                }
+                else
+                {
+                    if (Model.SelectedReportType.Text != "Please Select")
+                    {
+                                                                                                <div class="resultsheading">
+                                                                                                    <h1 class="panel-title list-panel-title">@Html.DisplayFor(m => m.SelectedReportType.Text) Report</h1>
+                                                                                                </div> }
+                    else
+                    {
+                                                                        <div class="resultsheading">
+                                                                            <h1 class="panel-title list-panel-title">TF/Network Cable Report</h1>
+                                                                        </div> }
+                                                <label style="color: red; font-size:12px; padding:0px; margin:0px;">&nbsp;&nbsp;@Html.DisplayFor(m => m.Message)</label> if (Model.Message != "Select mandatory fields to continue..." && Model.Message != "No results found" && Model.Message != "" && Model.Message != null)
+                    {
+                            <button id="pdfExport" data - export="export" class="pdfstyle"></button>
+                                                    <button id="csvExport" data-export="export" class="csvstyle"></button>}
+                }
+            </div>
+        </div>
+    </div>
+</div>
+}
