@@ -16,10 +16,10 @@ namespace Schema.TracingCore.Factory
             {
                 traceService = new FeederTraceService();
             }
-            /*if(traceType == "circuit")
+            if (traceType == "circuit-sequence")
             {
                 traceService = new CircuitTraceService();
-            }*/
+            }
             return traceService;
         }
 

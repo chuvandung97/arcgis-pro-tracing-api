@@ -18,7 +18,7 @@ namespace Schema.TracingCore.Services
         }*/
         public class Node
         {
-            public int Rank;
+            public int Rank = 1;
             public long? ObjectId;
             public string GlobalId = string.Empty;
             public int NetworkSourceId;
@@ -123,12 +123,12 @@ namespace Schema.TracingCore.Services
         {
             return new Dictionary<string, string>();
         }
-        public abstract Task<Dictionary<string, List<FeederTraceResult>>> RunTrace(List<NetworkInfo> parameters);
+        public abstract Task<Dictionary<string, object>> RunTrace(List<NetworkInfo> parameters);
 
-        protected HashSet<Node> CreateGraph(Node node, HashSet<ConnectivityItem> items)
+        protected HashSet<Node> CreateGraph(Node node, HashSet<ConnectivityItem> connectivities, HashSet<ElementItem> elementItems)
         {
             HashSet<Node> graphs = new HashSet<Node>(new NodeGlobalIdComparer());
-            HashSet<ConnectivityItem> connectivityItems = new HashSet<ConnectivityItem>(items);
+            HashSet<ConnectivityItem> connectivityItems = new HashSet<ConnectivityItem>(connectivities);
             graphs.Add(node);
             var q = new Queue<Node>();
             q.Enqueue(node);
@@ -138,7 +138,7 @@ namespace Schema.TracingCore.Services
                 var currentNode = q.Dequeue();
                 if (currentNode == null) continue;
 
-                HashSet<Node> childrens = FindChildren(currentNode, ref connectivityItems);
+                HashSet<Node> childrens = FindChildren(currentNode, ref connectivityItems, elementItems);
                 foreach (Node child in childrens)
                 {
                     q.Enqueue(child);
@@ -149,7 +149,7 @@ namespace Schema.TracingCore.Services
             return graphs;
         }
 
-        private HashSet<Node> FindChildren(Node node, ref HashSet<ConnectivityItem> connectivityItems)
+        private HashSet<Node> FindChildren(Node node, ref HashSet<ConnectivityItem> connectivityItems, HashSet<ElementItem> elementItems)
         {
             HashSet<Node> children = new HashSet<Node>(new NodeGlobalIdComparer());
 
@@ -160,22 +160,24 @@ namespace Schema.TracingCore.Services
             {
                 connectivityItems.Remove(childConnectivityItem);
                 if (Enum.IsDefined(typeof(Constant.sourceMapping), childConnectivityItem.FromNetworkSourceId))
-                    children.Add(CreateNode(node, childConnectivityItem, true));
+                    children.Add(CreateNode(node, childConnectivityItem, elementItems, true));
                 if (Enum.IsDefined(typeof(Constant.sourceMapping), childConnectivityItem.ToNetworkSourceId))
-                    children.Add(CreateNode(node, childConnectivityItem));
+                    children.Add(CreateNode(node, childConnectivityItem, elementItems));
             }
             return children;
         }
-        private Node CreateNode(Node node, ConnectivityItem item, bool isFrom = false)
+        private Node CreateNode(Node node, ConnectivityItem item, HashSet<ElementItem> elementItems, bool isFrom = false)
         {
+            string nodeGlobalId = isFrom ? item.FromGlobalId : item.ToGlobalId;
+            long nodeObjectId = isFrom ? item.FromObjectId : item.ToObjectId;
             return new Node()
             {
                 Rank = node.Rank + 1,
-                ObjectId = isFrom ? item.FromObjectId : item.ToObjectId,
+                ObjectId = ConvertObjectIdToNetworkId(nodeObjectId, nodeGlobalId, elementItems),
                 GlobalId = isFrom ? item.FromGlobalId : item.ToGlobalId,
                 NetworkSourceId = isFrom ? item.FromNetworkSourceId : item.ToNetworkSourceId,
                 Parent = node,
-                ViaObjectId = item.ViaObjectId,
+                ViaObjectId = ConvertObjectIdToNetworkId(item.ViaObjectId, item.ViaGlobalId, elementItems),
                 ViaGlobalId = item.ViaGlobalId,
                 ViaNetworkSourceId = item.ViaNetworkSourceId
             };

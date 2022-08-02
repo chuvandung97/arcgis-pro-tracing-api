@@ -25,84 +25,97 @@ namespace Schema.TracingCore.Services
             }
         }
 
-        public override async Task<Dictionary<string, List<FeederTraceResult>>> RunTrace(List<NetworkInfo> parameters)
+        public override async Task<Dictionary<string, object>> RunTrace(List<NetworkInfo> parameters)
         {
-            Dictionary<string, List<FeederTraceResult>> results = new Dictionary<string, List<FeederTraceResult>>();
+            var results = new Dictionary<string, object>();
 
             //List<NetworkInfo> networkInfos = JsonConvert.DeserializeObject<List<NetworkInfo>>(parameters);
             List<FeatureServiceInfo> featureServices = await Transform(parameters);
             foreach (FeatureServiceInfo featureService in featureServices)
             {
-                HashSet<FeederTraceTemp> tempResults = new HashSet<FeederTraceTemp>(new FeederTraceTempGlobalIdComparer());
-                HashSet<FeederTraceResult> transformResults = new HashSet<FeederTraceResult>();
-
-                JObject items = await GetConnectivityItemsAndElementItems(featureService, parameters);
-                Node rootNode = new Node()
+                try
                 {
-                    Rank = 1,
-                    ObjectId = featureService.ObjectId,
-                    GlobalId = featureService.GlobalId,
-                };
-                HashSet<Node> graphs = CreateGraph(rootNode, items["ConnectivityItems"].ToObject<HashSet<ConnectivityItem>>());
-                int firstRank = graphs.ToList()[0].Rank;
-                int lastRank = graphs.ToList()[graphs.Count - 1].Rank;
+                    HashSet<FeederTraceTemp> tempResults = new HashSet<FeederTraceTemp>(new FeederTraceTempGlobalIdComparer());
+                    HashSet<FeederTraceResult> transformResults = new HashSet<FeederTraceResult>();
 
-                for (int i = firstRank; i <= lastRank; i++)
-                {
-                    List<Node> nodes = graphs.Where(x => x.Rank == i).ToList();
-                    foreach(Node node in nodes)
+                    JObject items = await GetConnectivityItemsAndElementItems(featureService, parameters);
+                    HashSet<ConnectivityItem> connectivityItems = items["ConnectivityItems"].ToObject<HashSet<ConnectivityItem>>();
+                    HashSet<ElementItem> elementItems = items["ElementItems"].ToObject<HashSet<ElementItem>>();
+
+                    Node rootNode = new Node()
                     {
-                        FeederTraceTemp tempResult1 = tempResults.FirstOrDefault(item => item.EGID == node.Parent.ViaGlobalId);
-                        FeederTraceTemp tempResult2 = tempResults.FirstOrDefault(item => item.EGID == node.Parent.GlobalId);
-                        //Add line
-                        if (!string.IsNullOrEmpty(node.ViaGlobalId))
+                        ObjectId = ConvertObjectIdToNetworkId(featureService.ObjectId, featureService.GlobalId, elementItems),
+                        GlobalId = featureService.GlobalId,
+                    };
+                    HashSet<Node> graphs = CreateGraph(
+                        rootNode,
+                        connectivityItems,
+                        elementItems
+                    );
+                    int firstRank = graphs.ToList()[0].Rank;
+                    int lastRank = graphs.ToList()[graphs.Count - 1].Rank;
+
+                    for (int i = firstRank; i <= lastRank; i++)
+                    {
+                        List<Node> nodes = graphs.Where(x => x.Rank == i).ToList();
+                        foreach (Node node in nodes)
                         {
+                            FeederTraceTemp tempResult1 = tempResults.FirstOrDefault(item => item.EGID == node.Parent.ViaGlobalId);
+                            FeederTraceTemp tempResult2 = tempResults.FirstOrDefault(item => item.EGID == node.Parent.GlobalId);
+                            //Add line
+                            if (!string.IsNullOrEmpty(node.ViaGlobalId))
+                            {
+                                tempResults.Add(new FeederTraceTemp()
+                                {
+                                    Rank1 = node.Parent.Rank,
+                                    Rank2 = node.Parent.Rank * 2,
+                                    EID = node.ViaObjectId,
+                                    EGID = node.ViaGlobalId,
+                                    FIDs = new List<long?> { node.Parent.ObjectId },
+                                    TIDs = graphs.Where(x => x.ViaGlobalId == node.ViaGlobalId).Select(x => x.ObjectId).ToList(),
+                                    Path1 = tempResult1 != null ? tempResult1.Path1.Concat(new List<long?>() { node.ViaObjectId }).ToList() : new List<long?>() { node.ViaObjectId },
+                                    Path2 = tempResult2 != null ? tempResult2.Path2.Concat(new List<long?>() { node.ViaObjectId }).ToList() : new List<long?>() { node.ViaObjectId }
+                                });
+                            }
+                            //Add node
                             tempResults.Add(new FeederTraceTemp()
                             {
-                                Rank1 = i / 2,
-                                Rank2 = i - 1,
-                                EID = node.ViaObjectId,
-                                EGID = node.ViaGlobalId,
-                                FIDs = new List<long?> { node.Parent.ObjectId },
-                                TIDs = nodes.Where(x => x.GlobalId == node.GlobalId).Select(x => x.ObjectId).ToList(),
-                                Path1 = tempResult1 != null ? tempResult1.Path1.Concat(new List<long?>() { node.ViaObjectId }).ToList() : new List<long?>() { node.ViaObjectId },
-                                Path2 = tempResult2 != null ? tempResult2.Path2.Concat(new List<long?>() { node.ViaObjectId }).ToList() : new List<long?>() { node.ViaObjectId }
+                                Rank1 = null,
+                                Rank2 = node.Parent == null ? node.Rank : node.Rank + node.Parent.Rank,
+                                EID = node.ObjectId,
+                                EGID = node.GlobalId,
+                                FIDs = new List<long?> { node.ViaObjectId },
+                                TIDs = graphs.Where(x => x.GlobalId != node.GlobalId).Where(x => x.Parent != null && x.Parent.GlobalId == node.GlobalId).Select(x => x.ViaObjectId).ToList(),
+                                Path1 = new List<long?>(),
+                                Path2 = tempResult2 != null ? tempResult2.Path2.Concat(new List<long?>() { node.ViaObjectId, node.ObjectId }).ToList() : new List<long?>() { node.ViaObjectId, node.ObjectId },
                             });
                         }
-
-                        //Add node
-                        tempResults.Add(new FeederTraceTemp()
+                    }
+                    foreach (FeederTraceTemp tempResult in tempResults)
+                    {
+                        transformResults.Add(new FeederTraceResult()
                         {
-                            Rank1 = null,
-                            Rank2 = i,
-                            EID = node.ObjectId,
-                            EGID = node.GlobalId,
-                            FIDs = new List<long?> { node.ViaObjectId },
-                            TIDs = nodes.Where(x => x.GlobalId != node.GlobalId).Where(x => x.Parent.GlobalId == node.GlobalId).Select(x => x.ViaObjectId).ToList(),
-                            Path1 = new List<long?>(),
-                            Path2 = tempResult2 != null ? tempResult2.Path2.Concat(new List<long?>() { node.ViaObjectId, node.ObjectId }).ToList() : new List<long?>() { node.ViaObjectId, node.ObjectId },
+                            Rank1 = tempResult.Rank1,
+                            Rank2 = tempResult.Rank2,
+                            EID = tempResult.EID,
+                            EGID = tempResult.EGID,
+                            FIDs = string.Join(",", tempResult.FIDs.Distinct()),
+                            TIDs = string.Join(",", tempResult.TIDs.Distinct()),
+                            EndFlag = tempResult.TIDs.Any() ? false : true,
+                            Path1 = string.Join(",", tempResult.Path1).Trim(','),
+                            Path2 = string.Join(",", tempResult.Path2).Trim(',')
+
                         });
                     }
+                    results.Add($"{featureService.ObjectId}{featureService.AssetGroup}{featureService.AssetType}", transformResults.OrderBy(x => x.Rank2).ToList());
                 }
-                foreach(FeederTraceTemp tempResult in tempResults)
+                catch
                 {
-                    transformResults.Add(new FeederTraceResult()
-                    {
-                        Rank1 = tempResult.Rank1,
-                        Rank2 = tempResult.Rank2,
-                        EID = tempResult.EID,
-                        EGID = tempResult.EGID,
-                        FIDs = string.Join(",", tempResult.FIDs),
-                        TIDs = string.Join(",", tempResult.TIDs),
-                        EndFlag = tempResult.FIDs.Any() ? true : false,
-                        Path1 = string.Join(",", tempResult.Path1),
-                        Path2 = string.Join(",", tempResult.Path2)
-
-                    });
+                    continue;
                 }
-                results.Add($"{featureService.ObjectId}{featureService.AssetGroup}{featureService.AssetType}", transformResults.OrderBy(x => x.Rank2).ToList());
+                
             }
-            return results ;
+            return results;
         }
 
         public override string GetLayerDefs(FeatureServiceInfo featureServiceInfo)

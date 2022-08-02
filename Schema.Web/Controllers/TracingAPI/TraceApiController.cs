@@ -17,10 +17,18 @@ namespace Schema.Web.Controllers.TracingAPI
     {
         [Route("feeder")]
         [HttpPost]
-        public async Task<Dictionary<string, List<FeederTraceResult>>> Get([FromBody] List<NetworkInfo> parameters)
+        public async Task<IHttpActionResult> GetFeederTrace([FromBody] List<NetworkInfo> parameters)
         {
             var results = await TraceFactory.GetTraceType("feeder").RunTrace(parameters); 
-            return results;
+            return Ok(results);
+        }
+
+        [Route("circuit/sequence")]
+        [HttpPost]
+        public async Task<IHttpActionResult> GetSequenceCircuitTrace([FromBody] List<NetworkInfo> parameters)
+        {
+            var results = await TraceFactory.GetTraceType("circuit-sequence").RunTrace(parameters);
+            return Ok(results);
         }
     }
 }

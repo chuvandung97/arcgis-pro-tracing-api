@@ -10,7 +10,7 @@ namespace Schema.TracingCore.Services
 {
     public interface ITraceService
     {
-        Task<Dictionary<string, List<FeederTraceResult>>> RunTrace(List<NetworkInfo> parameters);
+        Task<Dictionary<string, object>> RunTrace(List<NetworkInfo> parameters);
         string GetLayerDefs(FeatureServiceInfo featureServiceInfo);
         Dictionary<string, string> GetTraceConfig(FeatureServiceInfo featureService, List<NetworkInfo> parameters);
     }

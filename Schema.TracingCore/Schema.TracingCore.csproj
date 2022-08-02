@@ -69,6 +69,8 @@
     <Compile Include="Models\ConnectivityItem.cs" />
     <Compile Include="Models\ElementItem.cs" />
     <Compile Include="Models\FeatureServiceInfo.cs" />
+    <Compile Include="Models\SequenceCircuitTraceTemp.cs" />
+    <Compile Include="Models\SequenceCircuitTraceResult.cs" />
     <Compile Include="Models\FeederTraceTemp.cs" />
     <Compile Include="Models\FeederTraceResult.cs" />
     <Compile Include="Models\NetworkInfo.cs" />
